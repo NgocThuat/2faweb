@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2FA Auth - Two Factor Authenticator</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #333;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+            position: relative;
+        }
+        h1 {
+            color: #007bff;
+            margin-bottom: 30px;
+            font-size: 24px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 20px;
+            box-sizing: border-box;
+            text-align: center;
+            letter-spacing: 2px;
+        }
+        input:focus {
+            border-color: #007bff;
+            outline: none;
+        }
+        .code-display {
+            font-size: 48px;
+            font-weight: bold;
+            color: #007bff;
+            letter-spacing: 8px;
+            margin: 20px 0;
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 10px;
+            min-height: 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.3s;
+            user-select: none;
+        }
+        .code-display:hover {
+            background: #e9ecef;
+        }
+        .timer {
+            font-size: 14px;
+            color: #666;
+            margin-top: 10px;
+        }
+        .error-msg {
+            font-size: 14px;
+            color: #e53e3e;
+            margin-top: 10px;
+            padding: 10px;
+            background: #fed7d7;
+            border-radius: 5px;
+            display: none;
+        }
+        .info-box {
+            margin-top: 30px;
+            padding: 15px;
+            background: #e3f2fd;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #1976d2;
+            border-left: 4px solid #007bff;
+        }
+        .copy-toast {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #28a745;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: opacity 0.3s, transform 0.3s;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .copy-toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 2FA Auth - Two Factor Authenticator</h1>
+        <input type="text" id="secretKey" placeholder="Enter Secret Key" maxlength="100" value="JBSWY3DPEHPK3PXP">
+        <div id="codeDisplay" class="code-display" style="display: none;">-----</div>
+        <div id="timer" class="timer"></div>
+        <div id="errorMsg" class="error-msg"></div>
+        <div class="info-box">
+            This website was created by GMAIL TRUST SELLER
+        </div>
+        <div id="copyToast" class="copy-toast">Copied to clipboard!</div>
+    </div>
+
+    <script>
+        // Check Crypto support
+        if (!window.crypto || !window.crypto.subtle) {
+            document.getElementById('errorMsg').textContent = 'Browser does not support Web Crypto API. Use Chrome/Firefox latest.';
+            document.getElementById('errorMsg').style.display = 'block';
+        }
+
+        // Fixed TOTP Implementation using Web Crypto API (RFC 6238 compliant)
+        function base32ToBytes(base32) {
+            const base32chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+            let bits = '';
+            base32 = base32.toUpperCase().replace(/[^A-Z2-7]/g, '');
+            for (let i = 0; i < base32.length; i++) {
+                const val = base32chars.indexOf(base32.charAt(i));
+                if (val !== -1) {
+                    bits += val.toString(2).padStart(5, '0');
+                }
+            }
+            const bytes = new Uint8Array(Math.floor(bits.length / 8));
+            for (let i = 0; i < bytes.length; i++) {
+                bytes[i] = parseInt(bits.substr(i * 8, 8), 2);
+            }
+            return bytes;
+        }
+
+        async function hmacSha1(keyBytes, dataBytes) {
+            const cryptoKey = await window.crypto.subtle.importKey(
+                'raw', keyBytes, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']
+            );
+            const signature = await window.crypto.subtle.sign('HMAC', cryptoKey, dataBytes);
+            return new Uint8Array(signature);
+        }
+
+        function hotpTruncate(hmac) {
+            const offset = hmac[hmac.length - 1] & 0x0f;
+            let code = 0;
+            for (let i = 0; i < 4; i++) {
+                code <<= 8;
+                code |= hmac[offset + i] & 0xff;
+            }
+            code &= 0x7fffffff; // Clear MSB
+            return code;
+        }
+
+        async function generateTOTP(secret, epoch = Date.now() / 1000, timeStep = 30, digits = 6) {
+            const keyBytes = base32ToBytes(secret);
+            if (keyBytes.length === 0) {
+                throw new Error('Invalid Base32 secret key');
+            }
+            const counter = BigInt(Math.floor(epoch / timeStep));
+            const counterBytes = new Uint8Array(8);
+            new DataView(counterBytes.buffer).setBigUint64(0, counter, false); // Big-endian
+
+            const hmac = await hmacSha1(keyBytes, counterBytes);
+            const code = hotpTruncate(hmac) % (10 ** digits);
+            return code.toString().padStart(digits, '0');
+        }
+
+        // Copy function with toast
+        async function copyToClipboard(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                const toast = document.getElementById('copyToast');
+                toast.classList.add('show');
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 2000);
+            } catch (err) {
+                console.error('Copy failed:', err);
+            }
+        }
+
+        async function updateCode() {
+            const secret = document.getElementById('secretKey').value.trim();
+            const errorEl = document.getElementById('errorMsg');
+            const codeEl = document.getElementById('codeDisplay');
+            errorEl.style.display = 'none';
+
+            if (!secret) {
+                codeEl.style.display = 'none';
+                return;
+            }
+
+            try {
+                const code = await generateTOTP(secret);
+                codeEl.textContent = code;
+                codeEl.style.display = 'block';
+
+                // Timer
+                const now = Date.now();
+                const seconds = 30 - (now / 1000 % 30);
+                document.getElementById('timer').textContent = `Next update in: ${Math.ceil(seconds)}s`;
+            } catch (error) {
+                console.error('TOTP Error Details:', error);
+                codeEl.style.display = 'none';
+                errorEl.textContent = `Error: ${error.message}. Check console (F12) for details.`;
+                errorEl.style.display = 'block';
+            }
+        }
+
+        function startTimer() {
+            setInterval(updateCode, 1000);
+        }
+
+        // Check URL param on load (now supports /key format)
+        window.onload = function() {
+            // First, check for ?key= (old format)
+            const urlParams = new URLSearchParams(window.location.search);
+            let keyFromUrl = urlParams.get('key');
+            
+            // Then, check for /key in pathname (new format, e.g., /abc123)
+            if (!keyFromUrl) {
+                const pathname = window.location.pathname;
+                const pathParts = pathname.split('/').filter(part => part.trim());
+                if (pathParts.length > 0) {
+                    keyFromUrl = pathParts[pathParts.length - 1]; // Last segment as key
+                }
+            }
+            
+            if (keyFromUrl) {
+                document.getElementById('secretKey').value = keyFromUrl;
+            }
+            // Auto start with default or URL key
+            if (document.getElementById('secretKey').value.trim()) {
+                updateCode();
+                startTimer();
+            }
+        };
+
+        // Auto-generate on input change (for UX)
+        document.getElementById('secretKey').addEventListener('input', function() {
+            if (this.value.trim()) {
+                updateCode();
+                if (!this.timerStarted) {
+                    startTimer();
+                    this.timerStarted = true;
+                }
+            } else {
+                document.getElementById('codeDisplay').style.display = 'none';
+                this.timerStarted = false;
+            }
+        });
+
+        // Click to copy on code display
+        document.getElementById('codeDisplay').addEventListener('click', function() {
+            const code = this.textContent;
+            if (code && code !== '-----' && code !== 'ERROR') {
+                copyToClipboard(code);
+            }
+        });
+    </script>
+</body>
+</html>
