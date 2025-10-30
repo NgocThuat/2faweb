@@ -131,6 +131,8 @@
     </div>
 
     <script>
+        let isFromUrlLoad = false; // Flag to prevent loop when loading from URL
+
         // Check Crypto support
         if (!window.crypto || !window.crypto.subtle) {
             document.getElementById('errorMsg').textContent = 'Browser does not support Web Crypto API. Use Chrome/Firefox latest.';
@@ -202,6 +204,18 @@
             }
         }
 
+        // Update URL based on key (without reload)
+        function updateUrl(key) {
+            if (!key.trim()) {
+                // Go back to root
+                window.history.pushState({}, document.title, window.location.origin + window.location.pathname.split('/').slice(0, -1).join('/') + '/');
+            } else {
+                // Set /key
+                const basePath = window.location.pathname.split('/').slice(0, -1).join('/');
+                window.history.pushState({}, document.title, basePath + '/' + key.trim());
+            }
+        }
+
         async function updateCode() {
             const secret = document.getElementById('secretKey').value.trim();
             const errorEl = document.getElementById('errorMsg');
@@ -212,6 +226,9 @@
             if (!secret) {
                 codeEl.style.display = 'none';
                 labelEl.style.display = 'none';
+                if (!isFromUrlLoad) {
+                    updateUrl(''); // Clear URL if no key
+                }
                 return;
             }
 
@@ -225,12 +242,19 @@
                 const now = Date.now();
                 const seconds = 30 - (now / 1000 % 30);
                 document.getElementById('timer').textContent = `Next update in: ${Math.ceil(seconds)}s`;
+
+                if (!isFromUrlLoad) {
+                    updateUrl(secret); // Update URL with key
+                }
             } catch (error) {
                 console.error('TOTP Error Details:', error);
                 codeEl.style.display = 'none';
                 labelEl.style.display = 'none';
                 errorEl.textContent = `Error: ${error.message}. Check console (F12) for details.`;
                 errorEl.style.display = 'block';
+                if (!isFromUrlLoad) {
+                    updateUrl(''); // Clear URL on error
+                }
             }
         }
 
@@ -240,6 +264,7 @@
 
         // Check URL param on load (now supports /key format)
         window.onload = function() {
+            isFromUrlLoad = true; // Set flag for initial load
             // First, check for ?key= (old format)
             const urlParams = new URLSearchParams(window.location.search);
             let keyFromUrl = urlParams.get('key');
@@ -261,21 +286,27 @@
                 updateCode();
                 startTimer();
             }
+            isFromUrlLoad = false; // Reset flag after initial load
         };
 
-        // Auto-generate on input change (for UX)
+        // Auto-generate on input change (for UX) - Debounce to avoid too many URL updates
+        let inputTimeout;
         document.getElementById('secretKey').addEventListener('input', function() {
-            if (this.value.trim()) {
-                updateCode();
-                if (!this.timerStarted) {
-                    startTimer();
-                    this.timerStarted = true;
+            clearTimeout(inputTimeout);
+            inputTimeout = setTimeout(() => {
+                if (this.value.trim()) {
+                    updateCode();
+                    if (!this.timerStarted) {
+                        startTimer();
+                        this.timerStarted = true;
+                    }
+                } else {
+                    document.getElementById('codeDisplay').style.display = 'none';
+                    document.getElementById('authLabel').style.display = 'none';
+                    this.timerStarted = false;
+                    updateUrl(''); // Clear URL
                 }
-            } else {
-                document.getElementById('codeDisplay').style.display = 'none';
-                document.getElementById('authLabel').style.display = 'none';
-                this.timerStarted = false;
-            }
+            }, 500); // Debounce 500ms
         });
 
         // Click to copy on code display
