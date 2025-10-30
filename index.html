@@ -46,6 +46,12 @@
             border-color: #007bff;
             outline: none;
         }
+        .auth-label {
+            font-size: 16px;
+            color: #007bff;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
         .code-display {
             font-size: 48px;
             font-weight: bold;
@@ -62,19 +68,9 @@
             cursor: pointer;
             transition: background 0.3s;
             user-select: none;
-            position: relative;
         }
         .code-display:hover {
             background: #e9ecef;
-        }
-        .code-display:hover::after {
-            content: '↗️'; /* Arrow icon on hover */
-            position: absolute;
-            right: 15px;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 20px;
-            opacity: 0.7;
         }
         .timer {
             font-size: 14px;
@@ -124,6 +120,7 @@
     <div class="container">
         <h1>🔐 2FA Auth - Two Factor Authenticator</h1>
         <input type="text" id="secretKey" placeholder="Enter Secret Key" maxlength="100">
+        <div id="authLabel" class="auth-label" style="display: none;">Authorization Code</div>
         <div id="codeDisplay" class="code-display" style="display: none;">-----</div>
         <div id="timer" class="timer"></div>
         <div id="errorMsg" class="error-msg"></div>
@@ -209,10 +206,12 @@
             const secret = document.getElementById('secretKey').value.trim();
             const errorEl = document.getElementById('errorMsg');
             const codeEl = document.getElementById('codeDisplay');
+            const labelEl = document.getElementById('authLabel');
             errorEl.style.display = 'none';
 
             if (!secret) {
                 codeEl.style.display = 'none';
+                labelEl.style.display = 'none';
                 return;
             }
 
@@ -220,6 +219,7 @@
                 const code = await generateTOTP(secret);
                 codeEl.textContent = code;
                 codeEl.style.display = 'block';
+                labelEl.style.display = 'block'; // Show label when code is ready
 
                 // Timer
                 const now = Date.now();
@@ -228,6 +228,7 @@
             } catch (error) {
                 console.error('TOTP Error Details:', error);
                 codeEl.style.display = 'none';
+                labelEl.style.display = 'none';
                 errorEl.textContent = `Error: ${error.message}. Check console (F12) for details.`;
                 errorEl.style.display = 'block';
             }
@@ -272,6 +273,7 @@
                 }
             } else {
                 document.getElementById('codeDisplay').style.display = 'none';
+                document.getElementById('authLabel').style.display = 'none';
                 this.timerStarted = false;
             }
         });
