@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>2FA Auth - Two Factor Authenticator</title>
     <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -117,6 +118,35 @@
             opacity: 1;
             transform: translateY(0);
         }
+
+        /* --- CSS cho nút Telegram đã chỉnh sửa --- */
+        .telegram-btn {
+            display: inline-flex;
+            align-items: center; /* Đảm bảo căn giữa dọc cho icon và text */
+            justify-content: center;
+            text-decoration: none;
+            background-color: #0088CC; 
+            color: white;
+            padding: 10px 20px; /* Giảm padding */
+            border-radius: 8px;
+            font-size: 15px; /* Giảm kích thước chữ */
+            font-weight: bold;
+            margin-top: 20px;
+            transition: background-color 0.3s, transform 0.1s;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .telegram-btn:hover {
+            background-color: #007bb6;
+            transform: translateY(-1px);
+        }
+
+        .telegram-btn i {
+            margin-right: 8px; /* Giảm khoảng cách */
+            font-size: 16px; /* Giảm kích thước icon */
+            /* Để khắc phục lệch, đảm bảo icon có cùng chiều cao dòng với text */
+            line-height: 1; 
+        }
     </style>
 </head>
 <body>
@@ -127,8 +157,13 @@
         <div id="codeDisplay" class="code-display" style="display: none;">-----</div>
         <div id="timer" class="timer"></div>
         <div id="errorMsg" class="error-msg"></div>
+        
+        <a href="https://t.me/gmail24hours" class="telegram-btn" target="_blank">
+            <i class="fa fa-telegram" aria-hidden="true"></i> Support Contact
+        </a>
+        
         <div class="info-box">
-            This website was created by @Gmail24hours
+            This website was created by Gmail24hours
         </div>
         <div id="copyToast" class="copy-toast">Copied to clipboard!</div>
     </div>
